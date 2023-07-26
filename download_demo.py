@@ -41,9 +41,7 @@ def check_integrity(videopath, md5):
         for chunk in iter(lambda: f.read(1024 * 1024), b''):
             md5o.update(chunk)
     md5c = md5o.hexdigest()
-    if md5c != md5:
-        return False
-    return True
+    return md5c == md5
 
 
 def worker(idx, mpq):
@@ -62,7 +60,7 @@ def worker(idx, mpq):
             start_t = time.time()
             succ = False
             failed_cnt = 0
-            for ind in range(args.num_retries):
+            for _ in range(args.num_retries):
                 try:
                     r = requests.get(url)
                     with open(videopath, 'wb') as fp:
@@ -73,7 +71,6 @@ def worker(idx, mpq):
                     succ = check_integrity(videopath, checksum)
                     if not succ:
                         check_failed_log.append(video)
-                    continue
                 else:
                     succ = True
                     continue
@@ -84,8 +81,8 @@ def worker(idx, mpq):
                 if args.verbose or index % 10000 == 0:
                     print('{:6d} video: {} is downloaded successfully. Time: {:.3f}(s)'.format(index, video, end_t))
         except Exception as e:
-            print('Exception: {}'.format(e))
-    print('process: {} done'.format(idx))
+            print(f'Exception: {e}')
+    print(f'process: {idx} done')
 
 
 def read_urls(filepath):
@@ -108,9 +105,9 @@ def read_checksum(filepath):
 
 if __name__ == "__main__":
     total, used, free = shutil.disk_usage(args.dst_path)
-    print('#total space: {} GB'.format(total // (2**30)))
-    print('#used space: {} GB'.format(used // (2**30)))
-    print('#free space: {} GB'.format(free // (2**30)))
+    print(f'#total space: {total // 2**30} GB')
+    print(f'#used space: {used // 2**30} GB')
+    print(f'#free space: {free // 2**30} GB')
     if free < 500:
         warnings.warn('Warning: the SVD requires over 500 GB space to store videos.')
     mpq = mp.Queue()
@@ -122,7 +119,7 @@ if __name__ == "__main__":
         procs.append(p)
 
     urls = read_urls(args.urls_path)
-    print('{} videos will be download.'.format(len(urls)))
+    print(f'{len(urls)} videos will be download.')
     checksums = None
     if args.checksum_path is not None and os.path.exists(args.checksum_path):
         checksums = read_checksum(args.checksum_path)
@@ -135,18 +132,16 @@ if __name__ == "__main__":
 
     for idx, p in enumerate(procs):
         p.join()
-        print('process: {} done'.format(idx))
+        print(f'process: {idx} done')
 
     print('downloading ends...')
-    failed_log = list(failed_log)
-    if len(failed_log) > 0:
+    if failed_log := list(failed_log):
         with open('log/failed-log.log', 'w') as fp:
             for lines in failed_log:
                 fp.write(lines + '\n')
         print('failed videos are store in log/failed-log.log')
 
-    check_failed_log = list(check_failed_log)
-    if len(check_failed_log) > 0:
+    if check_failed_log := list(check_failed_log):
         with open('log/check-failed-log.log', 'w') as fp:
             for lines in check_failed_log:
                 fp.write(lines + '\n')
